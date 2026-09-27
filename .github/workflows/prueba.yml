@@ -1,0 +1,30 @@
+name: Prueba de automatizacion
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '*/5 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Generar archivo de prueba
+        run: |
+          echo "fecha_hora" > datos_prueba.csv
+          date -u +"%Y-%m-%d %H:%M:%S UTC" >> datos_prueba.csv
+
+      - name: Guardar resultado
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add datos_prueba.csv
+          git commit -m "Actualizar datos de prueba" || echo "Sin cambios"
+          git push
