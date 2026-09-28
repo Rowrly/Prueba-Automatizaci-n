@@ -64,15 +64,21 @@ ARCHIVO = "minerales_historico.csv"
 
 def obtener_datos(url):
     print("Consultando API...")
+
     with urlopen(url, timeout=60) as respuesta:
         return json.loads(respuesta.read().decode("utf-8"))
 
 
 def construir_url(items, fecha_inicio=None, fecha_fin=None):
-    items_url = ",".join(quote(item, safe="@") for item in items)
+
+    items_url = ",".join(
+        quote(item, safe="@")
+        for item in items
+    )
 
     ciudades_url = ",".join(
-        quote(ciudad, safe="") for ciudad in CIUDADES
+        quote(ciudad, safe="")
+        for ciudad in CIUDADES
     )
 
     url = (
@@ -91,7 +97,8 @@ def construir_url(items, fecha_inicio=None, fecha_fin=None):
     return url
 
 
-def convertir_respuesta(datos, fecha_descarga):
+def convertir_respuesta(datos):
+
     filas = []
 
     for bloque in datos:
@@ -104,7 +111,7 @@ def convertir_respuesta(datos, fecha_descarga):
 
             filas.append({
                 "Fecha": registro.get("timestamp"),
-                "FechaDescarga": fecha_descarga,
+                "FechaDescarga": "",
                 "Ciudad": ciudad,
                 "ItemID": item_id,
                 "Calidad": calidad,
@@ -116,15 +123,24 @@ def convertir_respuesta(datos, fecha_descarga):
 
 
 def cargar_historico():
+
     if not os.path.exists(ARCHIVO):
         return []
 
-    with open(ARCHIVO, "r", encoding="utf-8", newline="") as archivo:
+    with open(
+        ARCHIVO,
+        "r",
+        encoding="utf-8",
+        newline=""
+    ) as archivo:
+
         lector = csv.DictReader(archivo)
+
         return list(lector)
 
 
 def guardar_historico(filas):
+
     columnas = [
         "Fecha",
         "FechaDescarga",
@@ -152,6 +168,7 @@ def guardar_historico(filas):
 
 
 def clave_fila(fila):
+
     return (
         fila["Fecha"],
         fila["Ciudad"],
@@ -162,17 +179,31 @@ def clave_fila(fila):
 
 def main():
 
-    historico = cargar_historico()
+    # ---------------------------------------------------------
+    # HORA DE ESTA EJECUCIÓN DE GITHUB
+    # ---------------------------------------------------------
 
-    # Fecha y hora real de esta ejecución de GitHub
-    fecha_descarga = datetime.now(timezone.utc).astimezone().strftime(
+    fecha_descarga = datetime.now(
+        timezone.utc
+    ).astimezone().strftime(
         "%Y-%m-%d %H:%M:%S"
     )
 
-    print(f"Fecha de descarga: {fecha_descarga}")
+    print(
+        f"Fecha de descarga de esta ejecución: "
+        f"{fecha_descarga}"
+    )
 
-    # Primera ejecución:
-    # descargamos todo el histórico disponible.
+    # ---------------------------------------------------------
+    # CARGAR HISTÓRICO EXISTENTE
+    # ---------------------------------------------------------
+
+    historico = cargar_historico()
+
+    # ---------------------------------------------------------
+    # PRIMERA EJECUCIÓN
+    # ---------------------------------------------------------
+
     if not historico:
 
         print("No existe histórico.")
@@ -182,65 +213,72 @@ def main():
 
         datos = obtener_datos(url)
 
-        nuevas_filas = convertir_respuesta(
-            datos,
-            fecha_descarga
+        nuevas_filas = convertir_respuesta(datos)
+
+        print(
+            f"Registros recibidos: "
+            f"{len(nuevas_filas)}"
         )
 
-        print(f"Registros recibidos: {len(nuevas_filas)}")
+        resultado = nuevas_filas
 
-        guardar_historico(nuevas_filas)
+    # ---------------------------------------------------------
+    # EJECUCIONES SIGUIENTES
+    # ---------------------------------------------------------
 
-        print(f"Archivo creado: {ARCHIVO}")
+    else:
 
-        return
+        ahora = datetime.now(timezone.utc)
 
-    # Si el archivo existente todavía no tiene FechaDescarga,
-    # agregamos la columna vacía al histórico antiguo.
-    for fila in historico:
-        if "FechaDescarga" not in fila:
-            fila["FechaDescarga"] = ""
+        fecha_fin = ahora.date()
 
-    # Ejecuciones siguientes:
-    # descargamos los últimos 2 días.
-    ahora = datetime.now(timezone.utc)
-    fecha_fin = ahora.date()
-    fecha_inicio = fecha_fin - timedelta(days=1)
+        fecha_inicio = (
+            fecha_fin - timedelta(days=1)
+        )
 
-    print(
-        f"Actualizando datos desde "
-        f"{fecha_inicio} hasta {fecha_fin}..."
-    )
+        print(
+            f"Actualizando datos desde "
+            f"{fecha_inicio} hasta {fecha_fin}..."
+        )
 
-    url = construir_url(
-        ITEMS,
-        fecha_inicio.strftime("%Y-%m-%d"),
-        fecha_fin.strftime("%Y-%m-%d")
-    )
+        url = construir_url(
+            ITEMS,
+            fecha_inicio.strftime("%Y-%m-%d"),
+            fecha_fin.strftime("%Y-%m-%d")
+        )
 
-    datos = obtener_datos(url)
+        datos = obtener_datos(url)
 
-    nuevas_filas = convertir_respuesta(
-        datos,
-        fecha_descarga
-    )
+        nuevas_filas = convertir_respuesta(datos)
 
-    print(f"Registros nuevos recibidos: {len(nuevas_filas)}")
+        print(
+            f"Registros nuevos recibidos: "
+            f"{len(nuevas_filas)}"
+        )
 
-    # Convertimos el histórico en diccionario.
-    # La clave NO incluye FechaDescarga.
-    # Por eso no se generan duplicados.
-    historico_dict = {
-        clave_fila(fila): fila
-        for fila in historico
-    }
+        # -----------------------------------------------------
+        # COMBINAR HISTÓRICO + DATOS NUEVOS
+        # -----------------------------------------------------
 
-    for fila in nuevas_filas:
-        historico_dict[clave_fila(fila)] = fila
+        historico_dict = {
+            clave_fila(fila): fila
+            for fila in historico
+        }
 
-    resultado = list(historico_dict.values())
+        for fila in nuevas_filas:
 
-    # Orden cronológico
+            historico_dict[
+                clave_fila(fila)
+            ] = fila
+
+        resultado = list(
+            historico_dict.values()
+        )
+
+    # ---------------------------------------------------------
+    # ORDENAR HISTÓRICO
+    # ---------------------------------------------------------
+
     resultado.sort(
         key=lambda fila: (
             fila["Fecha"],
@@ -249,10 +287,35 @@ def main():
         )
     )
 
+    # ---------------------------------------------------------
+    # IMPORTANTE:
+    # TODAS LAS FILAS RECIBEN LA MISMA FECHA DE DESCARGA
+    # ---------------------------------------------------------
+
+    for fila in resultado:
+
+        fila["FechaDescarga"] = fecha_descarga
+
+    # ---------------------------------------------------------
+    # GUARDAR CSV
+    # ---------------------------------------------------------
+
     guardar_historico(resultado)
 
-    print(f"Total histórico: {len(resultado)}")
-    print(f"Archivo actualizado: {ARCHIVO}")
+    print(
+        f"Total histórico: "
+        f"{len(resultado)}"
+    )
+
+    print(
+        f"Archivo actualizado: "
+        f"{ARCHIVO}"
+    )
+
+    print(
+        f"FechaDescarga aplicada a todas las filas: "
+        f"{fecha_descarga}"
+    )
 
 
 if __name__ == "__main__":
