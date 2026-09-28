@@ -56,7 +56,9 @@ ARCHIVO = "piel_historico.csv"
 
 def obtener_datos(url):
     with urlopen(url, timeout=60) as respuesta:
-        return json.loads(respuesta.read().decode("utf-8"))
+        return json.loads(
+            respuesta.read().decode("utf-8")
+        )
 
 
 def construir_url(item, ciudad):
@@ -73,20 +75,30 @@ def convertir_respuesta(datos, fecha_descarga):
     filas = []
 
     for registro in datos:
-        filas.append({
-            "Fecha": registro.get("timestamp"),
-            "FechaDescarga": fecha_descarga,
-            "Ciudad": registro.get("location"),
-            "ItemID": registro.get("item_id"),
-            "Calidad": registro.get("quality"),
-            "Cantidad": registro.get("item_count"),
-            "PrecioPromedio": registro.get("avg_price")
-        })
+
+        ciudad = registro.get("location")
+        item_id = registro.get("item_id")
+        calidad = registro.get("quality")
+
+        datos_historicos = registro.get("data", [])
+
+        for punto in datos_historicos:
+
+            filas.append({
+                "Fecha": punto.get("timestamp"),
+                "FechaDescarga": fecha_descarga,
+                "Ciudad": ciudad,
+                "ItemID": item_id,
+                "Calidad": calidad,
+                "Cantidad": punto.get("item_count"),
+                "PrecioPromedio": punto.get("avg_price")
+            })
 
     return filas
 
 
 def cargar_historico():
+
     if not os.path.exists(ARCHIVO):
         return []
 
@@ -96,11 +108,14 @@ def cargar_historico():
         encoding="utf-8",
         newline=""
     ) as archivo:
+
         lector = csv.DictReader(archivo)
+
         return list(lector)
 
 
 def guardar_historico(filas):
+
     columnas = [
         "Fecha",
         "FechaDescarga",
@@ -128,6 +143,7 @@ def guardar_historico(filas):
 
 
 def clave_fila(fila):
+
     return (
         fila["Fecha"],
         fila["Ciudad"],
@@ -150,7 +166,10 @@ def main():
 
         for item in ITEMS:
 
-            url = construir_url(item, ciudad)
+            url = construir_url(
+                item,
+                ciudad
+            )
 
             try:
 
@@ -179,9 +198,14 @@ def main():
     diccionario = {}
 
     for fila in combinadas:
-        diccionario[clave_fila(fila)] = fila
 
-    resultado = list(diccionario.values())
+        diccionario[
+            clave_fila(fila)
+        ] = fila
+
+    resultado = list(
+        diccionario.values()
+    )
 
     resultado.sort(
         key=lambda fila: (
@@ -194,8 +218,11 @@ def main():
     guardar_historico(resultado)
 
     print(
-        f"\nHistórico de piel actualizado."
-        f"\nFilas totales: {len(resultado)}"
+        "\nHistórico de piel actualizado."
+    )
+
+    print(
+        f"Filas totales: {len(resultado)}"
     )
 
 
