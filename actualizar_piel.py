@@ -1,11 +1,11 @@
 import csv
 import json
 import os
-import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 from urllib.request import urlopen
 from urllib.error import HTTPError
+
 
 BASE_URL = "https://west.albion-online-data.com/api/v2/stats/history"
 
@@ -20,26 +20,31 @@ CIUDADES = [
 ITEMS = [
     "T2_HIDE",
     "T3_HIDE",
+
     "T4_HIDE",
     "T4_HIDE_LEVEL1@1",
     "T4_HIDE_LEVEL2@2",
     "T4_HIDE_LEVEL3@3",
     "T4_HIDE_LEVEL4@4",
+
     "T5_HIDE",
     "T5_HIDE_LEVEL1@1",
     "T5_HIDE_LEVEL2@2",
     "T5_HIDE_LEVEL3@3",
     "T5_HIDE_LEVEL4@4",
+
     "T6_HIDE",
     "T6_HIDE_LEVEL1@1",
     "T6_HIDE_LEVEL2@2",
     "T6_HIDE_LEVEL3@3",
     "T6_HIDE_LEVEL4@4",
+
     "T7_HIDE",
     "T7_HIDE_LEVEL1@1",
     "T7_HIDE_LEVEL2@2",
     "T7_HIDE_LEVEL3@3",
     "T7_HIDE_LEVEL4@4",
+
     "T8_HIDE",
     "T8_HIDE_LEVEL1@1",
     "T8_HIDE_LEVEL2@2",
@@ -50,40 +55,35 @@ ITEMS = [
 ARCHIVO = "piel_historico.csv"
 
 
-def obtener_datos(url, intentos=3):
-    for intento in range(1, intentos + 1):
-        try:
-            with urlopen(url, timeout=60) as respuesta:
-                return json.loads(
-                    respuesta.read().decode("utf-8")
-                )
+def obtener_datos(url):
 
-        except HTTPError as error:
+    try:
 
-            if error.code == 429:
+        with urlopen(url, timeout=120) as respuesta:
 
-                espera = 10 * intento
+            contenido = respuesta.read().decode("utf-8")
 
-                print(
-                    f"429 Too Many Requests. "
-                    f"Esperando {espera} segundos..."
-                )
+            return json.loads(contenido)
 
-                time.sleep(espera)
+    except HTTPError as error:
 
-            else:
-                raise error
+        print(
+            f"ERROR HTTP {error.code}: {error.reason}"
+        )
 
-    raise Exception(
-        "La API continúa respondiendo 429 después de varios intentos."
-    )
+        raise
 
 
-def construir_url(item, ciudad):
+def construir_url():
+
+    items = ",".join(ITEMS)
+
+    ciudades = ",".join(CIUDADES)
+
     return (
         f"{BASE_URL}/"
-        f"{quote(item, safe='@')}.json"
-        f"?locations={quote(ciudad)}"
+        f"{quote(items, safe='@,')}.json"
+        f"?locations={quote(ciudades, safe=',')}"
         f"&qualities=1"
         f"&time-scale=24"
     )
@@ -93,37 +93,100 @@ def convertir_respuesta(datos, fecha_descarga):
 
     filas = []
 
+    # -------------------------------------------------
+    # ESTRUCTURA HISTÓRICA AGRUPADA
+    #
+    # [
+    #   {
+    #       "location": "...",
+    #       "item_id": "...",
+    #       "quality": 1,
+    #       "data": [
+    #           {
+    #               "timestamp": "...",
+    #               "item_count": ...,
+    #               "avg_price": ...
+    #           }
+    #       ]
+    #   }
+    # ]
+    # -------------------------------------------------
+
     for registro in datos:
 
-        timestamp = registro.get("timestamp")
         ciudad = registro.get("location")
         item_id = registro.get("item_id")
         calidad = registro.get("quality")
-        cantidad = registro.get("item_count")
-        precio = registro.get("avg_price")
 
-        # Evitar registros incompletos
-        if timestamp is None:
-            continue
+        data = registro.get("data")
 
-        if ciudad is None:
-            continue
+        if isinstance(data, list):
 
-        if item_id is None:
-            continue
+            for punto in data:
 
-        if calidad is None:
-            continue
+                timestamp = punto.get("timestamp")
 
-        filas.append({
-            "Fecha": timestamp,
-            "FechaDescarga": fecha_descarga,
-            "Ciudad": ciudad,
-            "ItemID": item_id,
-            "Calidad": calidad,
-            "Cantidad": cantidad,
-            "PrecioPromedio": precio
-        })
+                cantidad = punto.get("item_count")
+                precio = punto.get("avg_price")
+
+                if timestamp is None:
+                    continue
+
+                if ciudad is None:
+                    continue
+
+                if item_id is None:
+                    continue
+
+                if calidad is None:
+                    continue
+
+                filas.append({
+                    "Fecha": timestamp,
+                    "FechaDescarga": fecha_descarga,
+                    "Ciudad": ciudad,
+                    "ItemID": item_id,
+                    "Calidad": calidad,
+                    "Cantidad": cantidad,
+                    "PrecioPromedio": precio
+                })
+
+        # -------------------------------------------------
+        # ESTRUCTURA PLANA
+        #
+        # Se mantiene por seguridad, por si la API devuelve
+        # registros directamente.
+        # -------------------------------------------------
+
+        else:
+
+            timestamp = registro.get("timestamp")
+
+            if timestamp is None:
+                continue
+
+            ciudad = registro.get("location")
+            item_id = registro.get("item_id")
+            calidad = registro.get("quality")
+
+            if ciudad is None:
+                continue
+
+            if item_id is None:
+                continue
+
+            if calidad is None:
+                continue
+
+            filas.append({
+                "Fecha": timestamp,
+                "FechaDescarga": fecha_descarga,
+                "Ciudad": ciudad,
+                "ItemID": item_id,
+                "Calidad": calidad,
+                "Cantidad": registro.get("item_count"),
+                "PrecioPromedio": registro.get("avg_price")
+            })
 
     return filas
 
@@ -131,6 +194,7 @@ def convertir_respuesta(datos, fecha_descarga):
 def cargar_historico():
 
     if not os.path.exists(ARCHIVO):
+
         return []
 
     with open(
@@ -191,73 +255,147 @@ def main():
         - timedelta(hours=5)
     ).strftime("%Y-%m-%d %H:%M:%S")
 
+
+    print("========================================")
+    print("ACTUALIZANDO HISTÓRICO DE PIEL")
+    print("========================================")
+
+    print(
+        f"Ciudades: {len(CIUDADES)}"
+    )
+
+    print(
+        f"Ítems: {len(ITEMS)}"
+    )
+
+    print(
+        f"Combinaciones: "
+        f"{len(CIUDADES) * len(ITEMS)}"
+    )
+
+    print("")
+    print("Consultando API en una sola solicitud...")
+    print("")
+
+
+    # -----------------------------------------------
+    # UNA SOLA PETICIÓN PARA TODOS LOS ÍTEMS
+    # Y TODAS LAS CIUDADES
+    # -----------------------------------------------
+
+    url = construir_url()
+
+    print(
+        f"Longitud de URL: {len(url)} caracteres"
+    )
+
+    if len(url) > 4096:
+
+        raise Exception(
+            "La URL supera el límite de 4096 caracteres."
+        )
+
+
+    try:
+
+        datos = obtener_datos(url)
+
+    except Exception as error:
+
+        print("")
+        print("ERROR AL CONSULTAR LA API:")
+        print(error)
+
+        raise
+
+
+    print("API consultada correctamente.")
+
+
+    nuevas_filas = convertir_respuesta(
+        datos,
+        fecha_descarga
+    )
+
+
+    print(
+        f"Registros nuevos obtenidos: "
+        f"{len(nuevas_filas)}"
+    )
+
+
+    # -----------------------------------------------
+    # CARGAR HISTÓRICO EXISTENTE
+    # -----------------------------------------------
+
     historico = cargar_historico()
 
-    nuevas_filas = []
-
-    for ciudad in CIUDADES:
-
-        for item in ITEMS:
-
-            url = construir_url(item, ciudad)
-
-            try:
-
-                datos = obtener_datos(url)
-
-                filas = convertir_respuesta(
-                    datos,
-                    fecha_descarga
-                )
-
-                nuevas_filas.extend(filas)
-
-                print(
-                    f"OK: {ciudad} - {item} - "
-                    f"{len(filas)} registros"
-                )
-
-            except Exception as error:
-
-                print(
-                    f"ERROR: {ciudad} - {item} - {error}"
-                )
-
-            # Pequeña pausa entre solicitudes
-            time.sleep(1)
+    print(
+        f"Registros existentes: "
+        f"{len(historico)}"
+    )
 
 
-    # Unir histórico + datos nuevos
+    # -----------------------------------------------
+    # COMBINAR
+    # -----------------------------------------------
+
     combinadas = historico + nuevas_filas
 
     diccionario = {}
 
+
     for fila in combinadas:
 
-        if fila.get("Fecha") is None:
+        fecha = fila.get("Fecha")
+
+        if fecha is None or fecha == "":
+
             continue
 
         diccionario[clave_fila(fila)] = fila
 
-    resultado = list(diccionario.values())
+
+    resultado = list(
+        diccionario.values()
+    )
 
 
-    # Ordenar sin errores por valores None
+    # -----------------------------------------------
+    # ORDENAR
+    # -----------------------------------------------
+
     resultado.sort(
         key=lambda fila: (
             fila.get("Fecha") or "",
             fila.get("Ciudad") or "",
-            fila.get("ItemID") or ""
+            fila.get("ItemID") or "",
+            str(fila.get("Calidad") or "")
         )
     )
 
 
+    # -----------------------------------------------
+    # GUARDAR
+    # -----------------------------------------------
+
     guardar_historico(resultado)
 
+
     print("")
-    print("Histórico de piel actualizado.")
-    print(f"Filas totales: {len(resultado)}")
+    print("========================================")
+    print("HISTÓRICO DE PIEL ACTUALIZADO")
+    print("========================================")
+
+    print(
+        f"Filas totales: {len(resultado)}"
+    )
+
+    print(
+        f"Fecha de descarga: {fecha_descarga}"
+    )
 
 
 if __name__ == "__main__":
+
     main()
