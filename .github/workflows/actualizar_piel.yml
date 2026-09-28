@@ -1,0 +1,36 @@
+name: Actualizar piel
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 */6 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Actualizar histórico de piel
+        run: python actualizar_piel.py
+
+      - name: Guardar histórico
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add piel_historico.csv
+
+          git commit -m "Actualizar histórico de piel" || echo "Sin cambios"
+
+          git push
