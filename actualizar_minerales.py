@@ -63,7 +63,7 @@ ARCHIVO = "minerales_historico.csv"
 
 
 def obtener_datos(url):
-    print(f"Consultando API...")
+    print("Consultando API...")
     with urlopen(url, timeout=60) as respuesta:
         return json.loads(respuesta.read().decode("utf-8"))
 
@@ -91,7 +91,7 @@ def construir_url(items, fecha_inicio=None, fecha_fin=None):
     return url
 
 
-def convertir_respuesta(datos):
+def convertir_respuesta(datos, fecha_descarga):
     filas = []
 
     for bloque in datos:
@@ -104,6 +104,7 @@ def convertir_respuesta(datos):
 
             filas.append({
                 "Fecha": registro.get("timestamp"),
+                "FechaDescarga": fecha_descarga,
                 "Ciudad": ciudad,
                 "ItemID": item_id,
                 "Calidad": calidad,
@@ -126,6 +127,7 @@ def cargar_historico():
 def guardar_historico(filas):
     columnas = [
         "Fecha",
+        "FechaDescarga",
         "Ciudad",
         "ItemID",
         "Calidad",
@@ -162,6 +164,13 @@ def main():
 
     historico = cargar_historico()
 
+    # Fecha y hora real de esta ejecución de GitHub
+    fecha_descarga = datetime.now(timezone.utc).astimezone().strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+    print(f"Fecha de descarga: {fecha_descarga}")
+
     # Primera ejecución:
     # descargamos todo el histórico disponible.
     if not historico:
@@ -173,7 +182,10 @@ def main():
 
         datos = obtener_datos(url)
 
-        nuevas_filas = convertir_respuesta(datos)
+        nuevas_filas = convertir_respuesta(
+            datos,
+            fecha_descarga
+        )
 
         print(f"Registros recibidos: {len(nuevas_filas)}")
 
@@ -182,6 +194,12 @@ def main():
         print(f"Archivo creado: {ARCHIVO}")
 
         return
+
+    # Si el archivo existente todavía no tiene FechaDescarga,
+    # agregamos la columna vacía al histórico antiguo.
+    for fila in historico:
+        if "FechaDescarga" not in fila:
+            fila["FechaDescarga"] = ""
 
     # Ejecuciones siguientes:
     # descargamos los últimos 2 días.
@@ -202,13 +220,16 @@ def main():
 
     datos = obtener_datos(url)
 
-    nuevas_filas = convertir_respuesta(datos)
+    nuevas_filas = convertir_respuesta(
+        datos,
+        fecha_descarga
+    )
 
     print(f"Registros nuevos recibidos: {len(nuevas_filas)}")
 
     # Convertimos el histórico en diccionario.
-    # Si ya existe una fila con la misma clave,
-    # la nueva versión reemplaza a la anterior.
+    # La clave NO incluye FechaDescarga.
+    # Por eso no se generan duplicados.
     historico_dict = {
         clave_fila(fila): fila
         for fila in historico
