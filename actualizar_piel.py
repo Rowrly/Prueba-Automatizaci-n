@@ -7,7 +7,6 @@ from urllib.parse import quote
 from urllib.request import urlopen
 from urllib.error import HTTPError
 
-
 BASE_URL = "https://west.albion-online-data.com/api/v2/stats/history"
 
 CIUDADES = [
@@ -52,11 +51,8 @@ ARCHIVO = "piel_historico.csv"
 
 
 def obtener_datos(url, intentos=3):
-
     for intento in range(1, intentos + 1):
-
         try:
-
             with urlopen(url, timeout=60) as respuesta:
                 return json.loads(
                     respuesta.read().decode("utf-8")
@@ -76,7 +72,6 @@ def obtener_datos(url, intentos=3):
                 time.sleep(espera)
 
             else:
-
                 raise error
 
     raise Exception(
@@ -85,7 +80,6 @@ def obtener_datos(url, intentos=3):
 
 
 def construir_url(item, ciudad):
-
     return (
         f"{BASE_URL}/"
         f"{quote(item, safe='@')}.json"
@@ -108,7 +102,7 @@ def convertir_respuesta(datos, fecha_descarga):
         cantidad = registro.get("item_count")
         precio = registro.get("avg_price")
 
-        # Solo guardar registros completos
+        # Evitar registros incompletos
         if timestamp is None:
             continue
 
@@ -176,6 +170,7 @@ def guardar_historico(filas):
         )
 
         escritor.writeheader()
+
         escritor.writerows(filas)
 
 
@@ -192,7 +187,8 @@ def clave_fila(fila):
 def main():
 
     fecha_descarga = (
-        datetime.now(timezone.utc) - timedelta(hours=5)
+        datetime.now(timezone.utc)
+        - timedelta(hours=5)
     ).strftime("%Y-%m-%d %H:%M:%S")
 
     historico = cargar_historico()
@@ -203,10 +199,7 @@ def main():
 
         for item in ITEMS:
 
-            url = construir_url(
-                item,
-                ciudad
-            )
+            url = construir_url(item, ciudad)
 
             try:
 
@@ -230,9 +223,11 @@ def main():
                     f"ERROR: {ciudad} - {item} - {error}"
                 )
 
-            # Pequeña pausa para no saturar la API
+            # Pequeña pausa entre solicitudes
             time.sleep(1)
 
+
+    # Unir histórico + datos nuevos
     combinadas = historico + nuevas_filas
 
     diccionario = {}
@@ -242,14 +237,12 @@ def main():
         if fila.get("Fecha") is None:
             continue
 
-        diccionario[
-            clave_fila(fila)
-        ] = fila
+        diccionario[clave_fila(fila)] = fila
 
-    resultado = list(
-        diccionario.values()
-    )
+    resultado = list(diccionario.values())
 
+
+    # Ordenar sin errores por valores None
     resultado.sort(
         key=lambda fila: (
             fila.get("Fecha") or "",
@@ -258,15 +251,12 @@ def main():
         )
     )
 
+
     guardar_historico(resultado)
 
-    print(
-        "\nHistórico de piel actualizado."
-    )
-
-    print(
-        f"Filas totales: {len(resultado)}"
-    )
+    print("")
+    print("Histórico de piel actualizado.")
+    print(f"Filas totales: {len(resultado)}")
 
 
 if __name__ == "__main__":
