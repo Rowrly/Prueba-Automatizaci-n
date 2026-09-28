@@ -1,9 +1,12 @@
 import csv
 import json
 import os
+import time
 from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 from urllib.request import urlopen
+from urllib.error import HTTPError
+
 
 BASE_URL = "https://west.albion-online-data.com/api/v2/stats/history"
 
@@ -48,14 +51,41 @@ ITEMS = [
 ARCHIVO = "piel_historico.csv"
 
 
-def obtener_datos(url):
-    with urlopen(url, timeout=60) as respuesta:
-        return json.loads(
-            respuesta.read().decode("utf-8")
-        )
+def obtener_datos(url, intentos=3):
+
+    for intento in range(1, intentos + 1):
+
+        try:
+
+            with urlopen(url, timeout=60) as respuesta:
+                return json.loads(
+                    respuesta.read().decode("utf-8")
+                )
+
+        except HTTPError as error:
+
+            if error.code == 429:
+
+                espera = 10 * intento
+
+                print(
+                    f"429 Too Many Requests. "
+                    f"Esperando {espera} segundos..."
+                )
+
+                time.sleep(espera)
+
+            else:
+
+                raise error
+
+    raise Exception(
+        "La API continúa respondiendo 429 después de varios intentos."
+    )
 
 
 def construir_url(item, ciudad):
+
     return (
         f"{BASE_URL}/"
         f"{quote(item, safe='@')}.json"
@@ -66,24 +96,46 @@ def construir_url(item, ciudad):
 
 
 def convertir_respuesta(datos, fecha_descarga):
+
     filas = []
 
     for registro in datos:
 
+        timestamp = registro.get("timestamp")
+        ciudad = registro.get("location")
+        item_id = registro.get("item_id")
+        calidad = registro.get("quality")
+        cantidad = registro.get("item_count")
+        precio = registro.get("avg_price")
+
+        # Solo guardar registros completos
+        if timestamp is None:
+            continue
+
+        if ciudad is None:
+            continue
+
+        if item_id is None:
+            continue
+
+        if calidad is None:
+            continue
+
         filas.append({
-            "Fecha": registro.get("timestamp"),
+            "Fecha": timestamp,
             "FechaDescarga": fecha_descarga,
-            "Ciudad": registro.get("location"),
-            "ItemID": registro.get("item_id"),
-            "Calidad": registro.get("quality"),
-            "Cantidad": registro.get("item_count"),
-            "PrecioPromedio": registro.get("avg_price")
+            "Ciudad": ciudad,
+            "ItemID": item_id,
+            "Calidad": calidad,
+            "Cantidad": cantidad,
+            "PrecioPromedio": precio
         })
 
     return filas
 
 
 def cargar_historico():
+
     if not os.path.exists(ARCHIVO):
         return []
 
@@ -93,7 +145,9 @@ def cargar_historico():
         encoding="utf-8",
         newline=""
     ) as archivo:
+
         lector = csv.DictReader(archivo)
+
         return list(lector)
 
 
@@ -128,10 +182,10 @@ def guardar_historico(filas):
 def clave_fila(fila):
 
     return (
-        fila["Fecha"],
-        fila["Ciudad"],
-        fila["ItemID"],
-        str(fila["Calidad"])
+        fila.get("Fecha"),
+        fila.get("Ciudad"),
+        fila.get("ItemID"),
+        str(fila.get("Calidad"))
     )
 
 
@@ -176,28 +230,42 @@ def main():
                     f"ERROR: {ciudad} - {item} - {error}"
                 )
 
+            # Pequeña pausa para no saturar la API
+            time.sleep(1)
+
     combinadas = historico + nuevas_filas
 
     diccionario = {}
 
     for fila in combinadas:
-        diccionario[clave_fila(fila)] = fila
 
-    resultado = list(diccionario.values())
+        if fila.get("Fecha") is None:
+            continue
+
+        diccionario[
+            clave_fila(fila)
+        ] = fila
+
+    resultado = list(
+        diccionario.values()
+    )
 
     resultado.sort(
         key=lambda fila: (
-            fila["Fecha"],
-            fila["Ciudad"],
-            fila["ItemID"]
+            fila.get("Fecha") or "",
+            fila.get("Ciudad") or "",
+            fila.get("ItemID") or ""
         )
     )
 
     guardar_historico(resultado)
 
     print(
-        f"\nHistórico de piel actualizado."
-        f"\nFilas totales: {len(resultado)}"
+        "\nHistórico de piel actualizado."
+    )
+
+    print(
+        f"Filas totales: {len(resultado)}"
     )
 
 
