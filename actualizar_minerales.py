@@ -8,6 +8,7 @@ from urllib.request import urlopen
 
 BASE_URL = "https://west.albion-online-data.com/api/v2/stats/history"
 
+
 CIUDADES = [
     "Bridgewatch",
     "Fort Sterling",
@@ -16,48 +17,37 @@ CIUDADES = [
     "Thetford"
 ]
 
+
 ITEMS = [
-    # T2
     "T2_ORE",
-
-    # T3
     "T3_ORE",
-
-    # T4
     "T4_ORE",
     "T4_ORE_LEVEL1@1",
     "T4_ORE_LEVEL2@2",
     "T4_ORE_LEVEL3@3",
     "T4_ORE_LEVEL4@4",
-
-    # T5
     "T5_ORE",
     "T5_ORE_LEVEL1@1",
     "T5_ORE_LEVEL2@2",
     "T5_ORE_LEVEL3@3",
     "T5_ORE_LEVEL4@4",
-
-    # T6
     "T6_ORE",
     "T6_ORE_LEVEL1@1",
     "T6_ORE_LEVEL2@2",
     "T6_ORE_LEVEL3@3",
     "T6_ORE_LEVEL4@4",
-
-    # T7
     "T7_ORE",
     "T7_ORE_LEVEL1@1",
     "T7_ORE_LEVEL2@2",
     "T7_ORE_LEVEL3@3",
     "T7_ORE_LEVEL4@4",
-
-    # T8
     "T8_ORE",
     "T8_ORE_LEVEL1@1",
     "T8_ORE_LEVEL2@2",
     "T8_ORE_LEVEL3@3",
     "T8_ORE_LEVEL4@4"
 ]
+
 
 ARCHIVO = "minerales_historico.csv"
 
@@ -66,7 +56,9 @@ def obtener_datos(url):
     print("Consultando API...")
 
     with urlopen(url, timeout=60) as respuesta:
-        return json.loads(respuesta.read().decode("utf-8"))
+        return json.loads(
+            respuesta.read().decode("utf-8")
+        )
 
 
 def construir_url(items, fecha_inicio=None, fecha_fin=None):
@@ -179,13 +171,19 @@ def clave_fila(fila):
 
 def main():
 
-    # ---------------------------------------------------------
-    # HORA DE ESTA EJECUCIÓN DE GITHUB
-    # ---------------------------------------------------------
+    # ==========================================================
+    # FECHA DE DESCARGA
+    # ==========================================================
+    # GitHub Actions trabaja en UTC.
+    # Perú está en UTC-5.
+    #
+    # Por eso restamos 5 horas para obtener la hora de Perú.
+    # ==========================================================
 
-    fecha_descarga = datetime.now(
-        timezone.utc
-    ).astimezone().strftime(
+    fecha_descarga = (
+        datetime.now(timezone.utc)
+        - timedelta(hours=5)
+    ).strftime(
         "%Y-%m-%d %H:%M:%S"
     )
 
@@ -194,15 +192,17 @@ def main():
         f"{fecha_descarga}"
     )
 
-    # ---------------------------------------------------------
+
+    # ==========================================================
     # CARGAR HISTÓRICO EXISTENTE
-    # ---------------------------------------------------------
+    # ==========================================================
 
     historico = cargar_historico()
 
-    # ---------------------------------------------------------
+
+    # ==========================================================
     # PRIMERA EJECUCIÓN
-    # ---------------------------------------------------------
+    # ==========================================================
 
     if not historico:
 
@@ -222,9 +222,10 @@ def main():
 
         resultado = nuevas_filas
 
-    # ---------------------------------------------------------
-    # EJECUCIONES SIGUIENTES
-    # ---------------------------------------------------------
+
+    # ==========================================================
+    # ACTUALIZACIONES POSTERIORES
+    # ==========================================================
 
     else:
 
@@ -256,14 +257,16 @@ def main():
             f"{len(nuevas_filas)}"
         )
 
-        # -----------------------------------------------------
-        # COMBINAR HISTÓRICO + DATOS NUEVOS
-        # -----------------------------------------------------
+
+        # ======================================================
+        # UNIR HISTÓRICO + DATOS NUEVOS
+        # ======================================================
 
         historico_dict = {
             clave_fila(fila): fila
             for fila in historico
         }
+
 
         for fila in nuevas_filas:
 
@@ -271,13 +274,15 @@ def main():
                 clave_fila(fila)
             ] = fila
 
+
         resultado = list(
             historico_dict.values()
         )
 
-    # ---------------------------------------------------------
+
+    # ==========================================================
     # ORDENAR HISTÓRICO
-    # ---------------------------------------------------------
+    # ==========================================================
 
     resultado.sort(
         key=lambda fila: (
@@ -287,20 +292,45 @@ def main():
         )
     )
 
-    # ---------------------------------------------------------
+
+    # ==========================================================
+    # FECHADESCARGA
+    # ==========================================================
+    #
     # IMPORTANTE:
-    # TODAS LAS FILAS RECIBEN LA MISMA FECHA DE DESCARGA
-    # ---------------------------------------------------------
+    #
+    # TODAS las filas reciben exactamente la misma fecha/hora
+    # correspondiente a ESTA ejecución de GitHub Actions.
+    #
+    # Ejemplo:
+    #
+    # 2026-09-28 13:50:24
+    #
+    # Esa misma fecha aparecerá en las ~3,800 filas.
+    #
+    # En la siguiente ejecución:
+    #
+    # 2026-09-28 19:50:31
+    #
+    # TODAS las filas cambiarán a esa nueva fecha.
+    #
+    # ==========================================================
 
     for fila in resultado:
 
         fila["FechaDescarga"] = fecha_descarga
 
-    # ---------------------------------------------------------
+
+    # ==========================================================
     # GUARDAR CSV
-    # ---------------------------------------------------------
+    # ==========================================================
 
     guardar_historico(resultado)
+
+
+    # ==========================================================
+    # MENSAJES FINALES
+    # ==========================================================
 
     print(
         f"Total histórico: "
