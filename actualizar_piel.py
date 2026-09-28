@@ -5,7 +5,6 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import quote
 from urllib.request import urlopen
 
-
 BASE_URL = "https://west.albion-online-data.com/api/v2/stats/history"
 
 CIUDADES = [
@@ -19,31 +18,26 @@ CIUDADES = [
 ITEMS = [
     "T2_HIDE",
     "T3_HIDE",
-
     "T4_HIDE",
     "T4_HIDE_LEVEL1@1",
     "T4_HIDE_LEVEL2@2",
     "T4_HIDE_LEVEL3@3",
     "T4_HIDE_LEVEL4@4",
-
     "T5_HIDE",
     "T5_HIDE_LEVEL1@1",
     "T5_HIDE_LEVEL2@2",
     "T5_HIDE_LEVEL3@3",
     "T5_HIDE_LEVEL4@4",
-
     "T6_HIDE",
     "T6_HIDE_LEVEL1@1",
     "T6_HIDE_LEVEL2@2",
     "T6_HIDE_LEVEL3@3",
     "T6_HIDE_LEVEL4@4",
-
     "T7_HIDE",
     "T7_HIDE_LEVEL1@1",
     "T7_HIDE_LEVEL2@2",
     "T7_HIDE_LEVEL3@3",
     "T7_HIDE_LEVEL4@4",
-
     "T8_HIDE",
     "T8_HIDE_LEVEL1@1",
     "T8_HIDE_LEVEL2@2",
@@ -76,29 +70,20 @@ def convertir_respuesta(datos, fecha_descarga):
 
     for registro in datos:
 
-        ciudad = registro.get("location")
-        item_id = registro.get("item_id")
-        calidad = registro.get("quality")
-
-        datos_historicos = registro.get("data", [])
-
-        for punto in datos_historicos:
-
-            filas.append({
-                "Fecha": punto.get("timestamp"),
-                "FechaDescarga": fecha_descarga,
-                "Ciudad": ciudad,
-                "ItemID": item_id,
-                "Calidad": calidad,
-                "Cantidad": punto.get("item_count"),
-                "PrecioPromedio": punto.get("avg_price")
-            })
+        filas.append({
+            "Fecha": registro.get("timestamp"),
+            "FechaDescarga": fecha_descarga,
+            "Ciudad": registro.get("location"),
+            "ItemID": registro.get("item_id"),
+            "Calidad": registro.get("quality"),
+            "Cantidad": registro.get("item_count"),
+            "PrecioPromedio": registro.get("avg_price")
+        })
 
     return filas
 
 
 def cargar_historico():
-
     if not os.path.exists(ARCHIVO):
         return []
 
@@ -108,9 +93,7 @@ def cargar_historico():
         encoding="utf-8",
         newline=""
     ) as archivo:
-
         lector = csv.DictReader(archivo)
-
         return list(lector)
 
 
@@ -198,14 +181,9 @@ def main():
     diccionario = {}
 
     for fila in combinadas:
+        diccionario[clave_fila(fila)] = fila
 
-        diccionario[
-            clave_fila(fila)
-        ] = fila
-
-    resultado = list(
-        diccionario.values()
-    )
+    resultado = list(diccionario.values())
 
     resultado.sort(
         key=lambda fila: (
@@ -218,11 +196,8 @@ def main():
     guardar_historico(resultado)
 
     print(
-        "\nHistórico de piel actualizado."
-    )
-
-    print(
-        f"Filas totales: {len(resultado)}"
+        f"\nHistórico de piel actualizado."
+        f"\nFilas totales: {len(resultado)}"
     )
 
 
