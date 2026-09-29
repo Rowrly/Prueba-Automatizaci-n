@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: actualizar-datos-albion
+  cancel-in-progress: false
+
 jobs:
   actualizar:
     runs-on: ubuntu-latest
