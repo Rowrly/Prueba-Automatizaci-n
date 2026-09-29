@@ -1,0 +1,40 @@
+name: Actualizar piedra
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 */6 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: actualizar-datos-albion
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Actualizar histórico de piedra
+        run: python actualizar_piedra.py
+
+      - name: Guardar histórico
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add piedra_historico.csv
+
+          git commit -m "Actualizar histórico de piedra" || echo "Sin cambios"
+
+          git push
